@@ -1,0 +1,58 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest"><title>Owner Dashboard</title>
+<style>
+:root{--bg:#faf6f0;--card:#fff;--text:#2b2118;--muted:#7a6a5a;--accent:#b5541c;--line:#e4d8c8}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1713;--card:#2a221b;--text:#f3ebe1;--muted:#b3a290;--accent:#e8894a;--line:#43372c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 14px 24px;display:flex;justify-content:center}
+.w{width:100%;max-width:640px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+h1{font-size:21px;margin:0 0 4px}h2{font-size:16px;margin:0 0 8px}.sub{color:var(--muted);font-size:14px;margin:0 0 10px}
+input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:15px;margin-bottom:8px}
+button,a.b{padding:9px 13px;border:0;border-radius:9px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;display:inline-block}
+.c{display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding:10px 0;flex-wrap:wrap}
+.c img{width:80px;height:38px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px}
+.c .i{flex:1;min-width:140px;font-size:14px}.c small{color:var(--muted);display:block}
+#qr{display:flex;justify-content:center;background:#fff;padding:14px;border-radius:12px;margin:8px 0}.hide{display:none}
+#ban{background:var(--accent);color:#fff;padding:10px;border-radius:10px;margin-bottom:12px;font-weight:600}
+@media print{body *{visibility:hidden}#qrc,#qrc *{visibility:visible}#qrc{position:absolute;left:0;top:0;width:100%}}
+</style></head><body><div class="w">
+<div id="login" class="card"><h1>Owner login</h1><p class="sub">Enter your owner password.</p><input type="password" id="pw"><button id="lg">Login</button><p class="sub" id="le"></p></div>
+<div id="app" class="hide">
+<div id="ban" class="hide"></div>
+<div class="card"><h1 id="t"></h1><p class="sub" id="n"></p><button id="nt">Enable notifications and sound</button></div>
+<div class="card" id="qrc"><h2>Shop QR code (print and keep at the counter)</h2><div id="qr"></div><button onclick="print()">Print QR</button></div>
+<div class="card"><h2>Offer message</h2><input id="offer" value="Special offer for you: 20% off on your next visit at Hotel Usha Palace!"><div id="list"></div></div>
+</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);let key=localStorage.getItem('okey')||'',seen=null,timer=null;
+function beep(){try{const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();o.stop(a.currentTime+.25)}catch{}}
+async function load(){
+ const r=await fetch('/api/owner/customers',{headers:{'x-owner-key':key}});
+ if(r.status===401){localStorage.removeItem('okey');$('login').classList.remove('hide');$('app').classList.add('hide');clearInterval(timer);if(key)$('le').textContent='Wrong password';return}
+ const {cfg,list}=await r.json();$('login').classList.add('hide');$('app').classList.remove('hide');
+ $('t').textContent=cfg.name+' – Customers';$('n').textContent=list.length+' customers registered · Reward: '+cfg.reward+' at '+cfg.total+' stamps';
+ const sig=x=>x.phone+':'+x.last+':'+x.stamps;
+ if(seen){const fresh=list.filter(x=>!seen.has(sig(x)));
+  if(fresh.length){const x=fresh[0],m=(x.stamps===1?'New customer: ':'Stamp: ')+x.name+' ('+x.phone.slice(2)+') '+x.stamps+'/'+cfg.total;
+   $('ban').textContent=m;$('ban').classList.remove('hide');beep();if(window.Notification&&Notification.permission==='granted')new Notification(cfg.name,{body:m})}}
+ seen=new Set(list.map(sig));
+ const L=$('list');L.innerHTML='';
+ list.forEach(c=>{const r=document.createElement('div');r.className='c';
+  const im=document.createElement('img');if(String(c.sig).startsWith('data:image/png'))im.src=c.sig;
+  const i=document.createElement('div');i.className='i';const a=document.createElement('div');a.textContent=c.name;
+  const s=document.createElement('small');s.textContent=c.phone.slice(2)+' · '+c.stamps+'/'+cfg.total+' stamps · '+c.rewards+' rewards';i.append(a,s);
+  const w=document.createElement('a');w.className='b';w.target='_blank';w.rel='noopener';w.textContent='Send offer';
+  w.onclick=()=>{w.href='https://wa.me/'+c.phone+'?text='+encodeURIComponent('Hi '+c.name+'! '+$('offer').value)};w.href='#';
+  r.append(im,i,w);
+  if(c.stamps>=cfg.total){const b=document.createElement('button');b.textContent='Redeem';
+   b.onclick=async()=>{if(!confirm('Give '+cfg.reward+' to '+c.name+'?'))return;await fetch('/api/owner/redeem',{method:'POST',headers:{'x-owner-key':key,'content-type':'application/json'},body:JSON.stringify({phone:c.phone})});load()};r.append(b)}
+  L.appendChild(r)});
+}
+function start(){load();clearInterval(timer);timer=setInterval(load,8000);
+ const q=$('qr');q.innerHTML='';new QRCode(q,{text:location.origin+'/?s=1',width:220,height:220})}
+$('lg').onclick=()=>{key=$('pw').value;localStorage.setItem('okey',key);start()};
+$('nt').onclick=()=>{if(window.Notification)Notification.requestPermission();beep()};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+if(key)start();
+</script></body></html>

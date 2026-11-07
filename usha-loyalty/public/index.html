@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#b5541c"><title>Hotel Usha Palace Rewards</title>
+<style>
+:root{--bg:#faf6f0;--card:#fff;--text:#2b2118;--muted:#7a6a5a;--accent:#b5541c;--empty:#efe6da;--line:#e4d8c8}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1713;--card:#2a221b;--text:#f3ebe1;--muted:#b3a290;--accent:#e8894a;--empty:#3a3027;--line:#43372c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;display:flex;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 16px 24px}
+.w{width:100%;max-width:440px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.s{aspect-ratio:1;border-radius:50%;background:var(--empty);display:flex;align-items:center;justify-content:center;font-size:20px;color:transparent}.s.f{background:var(--accent);color:#fff}
+input[type=text],input[type=tel]{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px;margin-bottom:10px}
+label.l{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+canvas{width:100%;height:130px;border:1px dashed var(--muted);border-radius:10px;background:#fff;touch-action:none;display:block}
+button{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:16px;font-weight:600;margin-top:10px}button.alt{background:var(--empty);color:var(--text)}
+.msg{min-height:20px;text-align:center;color:var(--accent);font-weight:600;font-size:14px}.note{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:12px}
+.chk{display:flex;gap:8px;font-size:13px;margin-top:12px}.hide{display:none}
+</style></head><body><div class="w">
+<div id="join" class="card hide"><h1 class="biz"></h1><p class="sub">Register once to collect stamps and get special offers.</p>
+<label class="l">Name</label><input type="text" id="fn" autocomplete="name">
+<label class="l">Mobile number (10 digits)</label><input type="tel" id="fp" inputmode="numeric" maxlength="10">
+<label class="l">Signature (draw with finger)</label><canvas id="sig" width="600" height="260"></canvas>
+<button class="alt" id="clr" type="button">Clear signature</button>
+<label class="chk"><input type="checkbox" id="ok"><span>I agree to receive offers and updates from this hotel on my mobile number.</span></label>
+<p class="msg" id="err"></p><button id="go" type="button">Register and get my stamp</button></div>
+<div id="card" class="card hide"><h1 class="biz"></h1><p class="sub" id="rule"></p><div class="grid" id="grid"></div>
+<p class="msg" id="msg"></p><p class="note" id="cnt"></p>
+<p class="note">Scan the QR code at the hotel after each visit to collect a stamp. Show this screen to staff to redeem. Tip: use your browser menu, then "Add to Home Screen".</p></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),LS='usha-phone';
+async function api(p,o){const r=await fetch(p,o),j=await r.json();if(!r.ok)throw new Error(j.error||'Error');return j}
+const post=b=>api('/api/stamp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
+function show(v){$('join').classList.toggle('hide',v!=='join');$('card').classList.toggle('hide',v!=='card')}
+function render(c,m){document.title=c.business;document.querySelectorAll('.biz').forEach(e=>e.textContent=c.business);
+ $('rule').textContent='Hi '+c.name+'! Collect '+c.total+' stamps to get: '+c.reward;
+ const g=$('grid');g.innerHTML='';for(let i=0;i<c.total;i++){const d=document.createElement('div');d.className='s'+(i<c.stamps?' f':'');d.textContent=(i===c.total-1&&i>=c.stamps)?'🎁':'★';g.appendChild(d)}
+ g.style.gridTemplateColumns='repeat('+Math.min(c.total,5)+',1fr)';
+ $('msg').textContent=c.stamps>=c.total?'Reward ready! Show this to staff.':(m||'');
+ $('cnt').textContent='Stamps: '+c.stamps+' / '+c.total+' · Rewards earned: '+c.rewards;show('card')}
+const cv=$('sig'),cx=cv.getContext('2d');let dr=false,drawn=false;cx.lineWidth=5;cx.lineCap='round';cx.strokeStyle='#111';
+const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+cv.onpointerdown=e=>{dr=drawn=true;const[a,b]=pt(e);cx.beginPath();cx.moveTo(a,b);cv.setPointerCapture(e.pointerId)};
+cv.onpointermove=e=>{if(!dr)return;const[a,b]=pt(e);cx.lineTo(a,b);cx.stroke()};cv.onpointerup=cv.onpointercancel=()=>dr=false;
+$('clr').onclick=()=>{cx.clearRect(0,0,cv.width,cv.height);drawn=false};
+$('go').onclick=async()=>{const ph=$('fp').value.replace(/\D/g,'');
+ if($('fn').value.trim().length<2)return $('err').textContent='Please enter your name.';
+ if(ph.length!==10)return $('err').textContent='Enter a valid 10 digit mobile number.';
+ if(!drawn)return $('err').textContent='Please sign in the box.';
+ if(!$('ok').checked)return $('err').textContent='Please tick the agreement box.';
+ try{$('go').disabled=true;const c=await post({name:$('fn').value,phone:ph,sig:cv.toDataURL('image/png'),consent:true});
+  localStorage.setItem(LS,c.phone);render(c,c.message)}catch(e){$('err').textContent=e.message}finally{$('go').disabled=false}};
+(async()=>{try{const cfg=await api('/api/config');document.querySelectorAll('.biz').forEach(e=>e.textContent=cfg.name)}catch{}
+ const ph=localStorage.getItem(LS),scan=/[?&]s=1/.test(location.search);
+ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+ if(!ph)return show('join');
+ try{if(scan){const c=await post({phone:ph});history.replaceState(null,'','/');render(c,c.message)}else render(await api('/api/card?phone='+ph))}
+ catch(e){localStorage.removeItem(LS);show('join')}})();
+</script></body></html>
